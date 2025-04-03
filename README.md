@@ -1,6 +1,6 @@
 # Ollama Coffee GUI
 
-A lightweight, web-based GUI in pure javascript for interacting with Ollama models. Designed for speed and simplicity, it provides all essential chat functionality in a fast, resource-efficient package that runs directly in your browser.
+A lightweight, web-based GUI in pure javascript for interacting with Ollama models.
 
 ![Ollama Coffee GUI Preview](preview.png)
 
@@ -43,7 +43,6 @@ The application will automatically connect to Ollama's API at `http://localhost:
 1. Select a model from the dropdown menu
 2. Type your prompt in the input area
 3. Press Enter or click Send to start the conversation
-4. Use the "New Chat" button to start a fresh conversation
 
 ### Import/Export
 1. Click the "Actions" dropdown
