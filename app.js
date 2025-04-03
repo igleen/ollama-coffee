@@ -207,6 +207,33 @@ async function init() {
             versionDisplay.textContent = `v${APP_VERSION}`;
         }
 
+        // Test API connection first
+        try {
+            await fetch(`${API_BASE_URL}/tags`);
+        } catch (error) {
+            if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+                const guidance = `
+                    <div class="cors-error">
+                        <h2>⚠️ Server Required</h2>
+                        <p>This app needs to be served from a local web server to work properly.</p>
+                        <div class="steps">
+                            <p><strong>Why?</strong> Browser security prevents direct access to the Ollama API when opening the file directly.</p>
+                            <p><strong>Solution:</strong></p>
+                            <ol>
+                                <li>Open your terminal</li>
+                                <li>Navigate to the project folder</li>
+                                <li>Run: <code>python3 -m http.server</code></li>
+                                <li>Open: <a href="http://localhost:8000">http://localhost:8000</a></li>
+                            </ol>
+                        </div>
+                    </div>`;
+                messagesContainer.innerHTML = guidance;
+                updateStatus('Server setup required');
+                return;
+            }
+            throw error;  // Re-throw if it's not a CORS error
+        }
+
         await loadModels();
         
         // Clean up old chats on startup

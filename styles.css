@@ -526,6 +526,57 @@ button:disabled {
     width: 8px;
 }
 
+/* CORS Error Message Styles */
+.cors-error {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 2rem;
+    border-radius: 8px;
+    background-color: var(--chat-bg);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    text-align: left;
+}
+
+.cors-error h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #e74c3c;
+    margin-bottom: 1rem;
+    font-size: 1.5em;
+}
+
+.cors-error .steps {
+    margin-top: 1rem;
+    color: var(--text-color);
+}
+
+.cors-error code {
+    background: var(--bot-message-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.cors-error a {
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+
+.cors-error a:hover {
+    text-decoration: underline;
+}
+
+.cors-error ol {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+}
+
+.cors-error li {
+    margin: 0.5rem 0;
+}
+
 .chat-list::-webkit-scrollbar-track,
 .messages::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.05);
