@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama GUI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="button-group">
+                <button id="newChat" class="new-chat-btn">New Chat</button>
+                <button id="deleteChats" class="delete-chats-btn" title="Delete Chats">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="chatList" class="chat-list">
+                <!-- Chat history will be inserted here -->
+            </div>
+        </aside>
+        <main class="main-content">
+            <header>
+                <h1>Ollama</h1>
+                <div class="version-display">v27</div>
+                <div class="header-right">
+                    <div class="model-selector">
+                        <select id="model">
+                            <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                    <div class="chat-actions-dropdown">
+                        <button class="dropdown-btn" id="chatActionsBtn">
+                            Actions
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 9l6 6 6-6"/>
+                            </svg>
+                        </button>
+                        <div class="dropdown-menu" id="chatActionsMenu">
+                            <button class="dropdown-item" id="switchTheme">Switch Theme</button>
+                            <button class="dropdown-item" id="exportChats">Export Chat History</button>
+                            <button class="dropdown-item" id="importChats">Import Chat History</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <div class="input-area">
+                <textarea
+                    id="prompt"
+                    placeholder="Enter your prompt here..."
+                    rows="3"
+                ></textarea>
+                <button id="send">Send</button>
+            </div>
+            
+            <div class="status">
+            <div class="status-message" id="status"></div>
+            <div class="status-metrics" id="metrics">
+                <div class="metric-item">
+                    <span class="metric-label">Duration:</span>
+                    <span class="metric-value" id="totalDuration">-</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Speed:</span>
+                    <span class="metric-value" id="generationSpeed">-</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Tokens:</span>
+                    <span class="metric-value" id="tokenCount">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
