@@ -2,6 +2,8 @@
 
 A lightweight, efficient web-based GUI for interacting with Ollama models. Designed for speed and simplicity, it provides all essential chat functionality in a fast, resource-efficient package that runs directly in your browser.
 
+![Ollama Coffee GUI Preview](preview.png)
+
 ## Features
 
 - **Interactive Chat Interface**
