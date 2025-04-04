@@ -1,6 +1,42 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:11434/api';
-const APP_VERSION = '0.1';
+const APP_VERSION = '0.2';
+// Configure marked options
+marked.setOptions({
+    breaks: true,     // Enable line breaks
+    gfm: true,        // Enable GitHub Flavored Markdown
+    sanitize: false,  // Allow HTML in the input
+    smartypants: true, // Enable smart punctuation
+    xhtml: true,      // Enable XHTML compatible tags
+    headerIds: false  // Disable header IDs to avoid conflicts
+});
+
+// Configure marked renderer for better control
+const renderer = new marked.Renderer();
+renderer.code = (code, language) => {
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+    
+    if (typeof code !== 'string') {
+      try {
+        code = JSON.stringify(code, null, 2);
+      } catch (err) {
+        code = String(code);
+      }
+    }
+    
+    const escapedCode = escapeHtml(code);
+    const langClass = language ? `language-${language}` : 'language-text';
+    return `<pre><code class="${langClass}">${escapedCode}</code></pre>`;
+};
+marked.use({ renderer });
+
 
 // DOM Elements
 const modelSelect = document.getElementById('model');
@@ -24,6 +60,7 @@ let isRemoveMode = false;
 let selectedChats = new Set();
 let abortController = null;
 let currentTheme = localStorage.getItem('theme') || 'coffee';
+let isMarkdownEnabled = localStorage.getItem('markdownEnabled') === 'false' ? false : true;
 
 // Performance tracking
 let currentMetrics = {
@@ -96,7 +133,8 @@ function loadChat(chatId) {
         .filter(msg => !msg.deleted)
         .forEach(msg => {
             // Don't save to storage when loading existing messages
-            appendMessage(msg.content, msg.type, false);
+            // Pass the message's sequence number
+            appendMessage(msg.content, msg.type, false, msg.sequence);
         });
     
     if (chat.model && modelSelect.querySelector(`option[value="${chat.model}"]`)) {
@@ -153,6 +191,21 @@ function toggleRemoveMode() {
     isRemoveMode = !isRemoveMode;
     selectedChats.clear();
     deleteChatsButton.classList.toggle('active');
+    
+    // Show/hide the deletion mode popup
+    const deletionModePopup = document.getElementById('deletionModePopup');
+    if (isRemoveMode) {
+        deletionModePopup.classList.add('visible');
+        // Hide popup after 10 seconds
+        setTimeout(() => {
+            if (deletionModePopup.classList.contains('visible')) {
+                deletionModePopup.classList.remove('visible');
+            }
+        }, 10000);
+    } else {
+        deletionModePopup.classList.remove('visible');
+    }
+    
     updateChatList();
 }
 
@@ -414,9 +467,108 @@ function switchTheme() {
     updateStatus(`Switched to ${currentTheme} theme`);
 }
 
+function toggleMarkdownMode() {
+    isMarkdownEnabled = !isMarkdownEnabled;
+    localStorage.setItem('markdownEnabled', isMarkdownEnabled);
+    
+    // Update button text
+    const toggleBtn = document.getElementById('toggleMarkdown');
+    toggleBtn.textContent = isMarkdownEnabled ? 'Disable Markdown' : 'Enable Markdown';
+
+    // Re-render existing messages
+    if (currentChatId) {
+        const chat = chatStorage.getChat(currentChatId);
+        if (chat) {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = ''; // Clear existing messages
+            chat.messages
+                .filter(msg => !msg.deleted)
+                .forEach(msg => {
+                    appendMessage(msg.content, msg.type, false, msg.sequence);
+                });
+        }
+    }
+    
+    updateStatus(`Markdown rendering ${isMarkdownEnabled ? 'enabled' : 'disabled'}`);
+}
+
+// Function to adjust textarea height based on content
+function adjustTextareaHeight(textarea) {
+    // Store the initial height before changes
+    const initialHeight = textarea.clientHeight;
+    
+    // Reset height to calculate correct scrollHeight
+    textarea.style.height = '60px';
+    
+    // Calculate new height (constrained by CSS max-height: 50vh)
+    const newHeight = Math.min(textarea.scrollHeight, window.innerHeight * 0.5);
+    
+    // Set new height
+    textarea.style.height = newHeight + 'px';
+    
+    // Calculate height difference to adjust messages container
+    const heightDifference = newHeight - initialHeight;
+    
+    // Only adjust messages container if height actually changed
+    if (heightDifference !== 0) {
+        const messagesContainer = document.getElementById('messages');
+        
+        // Adjust messages container height to accommodate textarea change
+        // Use requestAnimationFrame to ensure DOM updates properly
+        requestAnimationFrame(() => {
+            // Calculate remaining space for messages
+            const chatContainer = document.querySelector('.chat-container');
+            const inputArea = document.querySelector('.input-area');
+            const statusBar = document.querySelector('.status');
+            
+            const availableHeight = chatContainer.clientHeight - 
+                                   inputArea.clientHeight - 
+                                   statusBar.clientHeight - 
+                                   28; // Account for gaps/margins
+            
+            // Apply new height to messages container
+            messagesContainer.style.maxHeight = `${availableHeight}px`;
+            
+            // Scroll messages to bottom when typing
+            if (heightDifference > 0) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+    }
+}
+
+// Function to recalculate message container size
+function recalculateMessageContainerSize() {
+    const messagesContainer = document.getElementById('messages');
+    const chatContainer = document.querySelector('.chat-container');
+    const inputArea = document.querySelector('.input-area');
+    const statusBar = document.querySelector('.status');
+    
+    if (messagesContainer && chatContainer && inputArea && statusBar) {
+        const availableHeight = chatContainer.clientHeight - 
+                               inputArea.clientHeight - 
+                               statusBar.clientHeight - 
+                               28; // Account for gaps/margins
+        
+        messagesContainer.style.maxHeight = `${availableHeight}px`;
+    }
+}
+
 function setupEventListeners() {
-    // Initialize theme
+    // Initialize theme and markdown button
     document.documentElement.setAttribute('data-theme', currentTheme);
+    const toggleMarkdownBtn = document.getElementById('toggleMarkdown');
+    toggleMarkdownBtn.textContent = isMarkdownEnabled ? 'Disable Markdown' : 'Enable Markdown';
+    
+    // Setup auto-resize for textarea
+    setupTextareaAutoResize();
+    
+    // Add window resize listener to adjust message container on viewport changes
+    window.addEventListener('resize', recalculateMessageContainerSize);
+    
+    // Initial calculation of message container size
+    recalculateMessageContainerSize();
+    
     modelSelect.addEventListener('change', (e) => {
         currentModel = e.target.value;
         resetMetrics(); // Reset metrics when model changes
@@ -481,6 +633,49 @@ function setupEventListeners() {
         chatActionsBtn.classList.remove('active');
         chatActionsMenu.classList.remove('show');
     });
+
+    // Markdown toggle
+    document.getElementById('toggleMarkdown').addEventListener('click', () => {
+        toggleMarkdownMode();
+        // Close dropdown after selecting action
+        chatActionsBtn.classList.remove('active');
+        chatActionsMenu.classList.remove('show');
+    });
+
+    // Add event listener for the close button on the deletion mode popup
+    const closePopupBtn = document.getElementById('closePopup');
+    if (closePopupBtn) {
+        closePopupBtn.addEventListener('click', () => {
+            document.getElementById('deletionModePopup').classList.remove('visible');
+        });
+    }
+}
+
+// Function to set up textarea auto-resize
+function setupTextareaAutoResize() {
+    const textarea = document.getElementById('prompt');
+    
+    // Initial adjustment
+    adjustTextareaHeight(textarea);
+    
+    // Adjust height on input
+    textarea.addEventListener('input', function() {
+        adjustTextareaHeight(this);
+    });
+    
+    // Reset height when cleared (after sending message)
+    const originalObserve = promptInput.value;
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                if (promptInput.value === '') {
+                    promptInput.style.height = '60px';
+                }
+            }
+        });
+    });
+    
+    observer.observe(promptInput, { attributes: true });
 }
 
 // Handle sending messages
@@ -526,6 +721,7 @@ async function handleSend() {
             // Normal message flow with non-empty prompt
             appendMessage(prompt, 'user'); // This still saves the user message
             promptInput.value = '';
+            promptInput.style.height = '60px'; // Reset height after clearing
             finalBotResponse = await generateResponse(prompt);
         }
 
@@ -700,6 +896,14 @@ async function generateResponse(prompt) {
             throw new Error('Failed to generate response');
         }
     } finally {
+        if (botMessageElement) {
+            const contentDiv = botMessageElement.querySelector('.message-content');
+            if (contentDiv) {
+                // Re-render the last message with correct markdown
+                const cleanContent = botResponse.replace(/[\n\s]+$/, '');
+                contentDiv.innerHTML = isMarkdownEnabled ? marked.parse(cleanContent) : cleanContent;
+            }
+        }
         if (metricsUpdateInterval) {
             clearInterval(metricsUpdateInterval);
             metricsUpdateInterval = null;
@@ -711,7 +915,8 @@ async function generateResponse(prompt) {
 }
 
 // UI Updates
-function appendMessage(content, type, save = true) {
+// Added optional 'sequenceNum' parameter
+function appendMessage(content, type, save = true, sequenceNum = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}-message`;
     
@@ -719,13 +924,38 @@ function appendMessage(content, type, save = true) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     // Clean content of trailing newlines and spaces
-    contentDiv.textContent = content.replace(/[\n\s]+$/, '');
+    const cleanContent = content.replace(/[\n\s]+$/, '');
+    // Store the raw content in the message div's dataset
+    messageDiv.dataset.rawContent = cleanContent;
+    // Use Markdown if enabled, otherwise use plain text
+    if (isMarkdownEnabled) {
+        try {
+            contentDiv.innerHTML = marked.parse(cleanContent);
+        } catch (error) {
+            console.error('Markdown parsing error:', error);
+            contentDiv.textContent = cleanContent;
+        }
+    } else {
+        contentDiv.textContent = cleanContent;
+    }
     messageDiv.appendChild(contentDiv);
     
     // Add sequence number as data attribute
-    const chat = chatStorage.getChat(currentChatId);
-    const sequence = chat ? chat.messages.length : 0;
-    messageDiv.dataset.sequence = sequence.toString();
+    // If sequenceNum is provided (loading existing message), use it.
+    // Otherwise (saving new message), calculate it based on current chat length.
+    let sequence;
+    if (sequenceNum !== null) {
+        sequence = sequenceNum;
+    } else if (save) {
+        const chat = chatStorage.getChat(currentChatId);
+        sequence = chat ? chat.messages.length : 0;
+    }
+
+    if (sequence !== undefined) { // Ensure sequence is valid before setting
+        messageDiv.dataset.sequence = sequence.toString();
+    } else {
+        console.warn("Could not determine sequence number for message.");
+    }
     
     // Add message controls
     const controls = document.createElement('div');
@@ -759,8 +989,9 @@ function appendMessage(content, type, save = true) {
     const deleteBtn = controls.querySelector('.delete-btn');
     
     copyBtn.addEventListener('click', () => {
-        const content = contentDiv.textContent;
-        navigator.clipboard.writeText(content).then(() => {
+        // Get the original raw content instead of rendered HTML
+        const rawContent = messageDiv.dataset.rawContent || contentDiv.textContent;
+        navigator.clipboard.writeText(rawContent).then(() => {
             // Show brief visual feedback
             copyBtn.classList.add('copied');
             setTimeout(() => copyBtn.classList.remove('copied'), 1000);
@@ -810,7 +1041,8 @@ function appendMessage(content, type, save = true) {
 
 function handleEditMessage(messageDiv, type) {
     const contentDiv = messageDiv.querySelector('.message-content');
-    const originalContent = contentDiv.textContent;
+    // Use the stored raw content for editing
+    const originalContent = messageDiv.dataset.rawContent || contentDiv.textContent;
     
     // Create and configure textarea
     const textarea = document.createElement('textarea');
@@ -822,32 +1054,66 @@ function handleEditMessage(messageDiv, type) {
     contentDiv.innerHTML = '';
     contentDiv.appendChild(textarea);
     textarea.focus();
-    
+    // Define the blur handler separately to allow removal
+    const blurHandler = () => {
+        // Check if the element still exists before saving
+        if (document.body.contains(textarea)) {
+            saveEdit(messageDiv, textarea.value, type);
+        }
+    };
+
+    // Handle save on Enter (without shift) and cancel on Escape
     // Handle save on Enter (without shift) and cancel on Escape
     textarea.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            // Remove blur listener *before* saving to prevent race condition
+            textarea.removeEventListener('blur', blurHandler);
             saveEdit(messageDiv, textarea.value, type);
         } else if (e.key === 'Escape') {
+            // Remove blur listener on cancel as well
+            textarea.removeEventListener('blur', blurHandler);
             cancelEdit(messageDiv, originalContent);
         }
     });
     
-    // Handle blur
-    textarea.addEventListener('blur', () => {
-        saveEdit(messageDiv, textarea.value, type);
-    });
+    // Add the blur listener using the named handler
+    textarea.addEventListener('blur', blurHandler);
+
+    // Function to adjust textarea height
+    const adjustTextareaHeight = () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+    };
+
+    // Adjust height on input
+    textarea.addEventListener('input', adjustTextareaHeight);
+
+    // Adjust height initially
+    adjustTextareaHeight();
 }
 
 function saveEdit(messageDiv, newContent, type) {
     if (!newContent.trim()) {
         // If content is empty, treat as cancel
-        cancelEdit(messageDiv, messageDiv.querySelector('.message-content').textContent);
+        cancelEdit(messageDiv, messageDiv.dataset.rawContent);
         return;
     }
     
+    // Update the stored raw content
+    messageDiv.dataset.rawContent = newContent;
     const contentDiv = messageDiv.querySelector('.message-content');
-    contentDiv.textContent = newContent;
+    // Apply Markdown if enabled, otherwise use plain text
+    if (isMarkdownEnabled) {
+        try {
+            contentDiv.innerHTML = marked.parse(newContent);
+        } catch (error) {
+            console.error('Markdown parsing error:', error);
+            contentDiv.textContent = newContent;
+        }
+    } else {
+        contentDiv.textContent = newContent;
+    }
     messageDiv.classList.remove('editing');
     
     // Update in storage
@@ -858,10 +1124,14 @@ function saveEdit(messageDiv, newContent, type) {
             const messageIndex = chat.messages.findIndex(m => m.sequence === sequence);
             
             if (messageIndex !== -1) {
+                console.log(`Saving edit for sequence: ${sequence}, found at index: ${messageIndex}`); // Log found index
                 chat.messages[messageIndex].content = newContent;
                 chat.messages[messageIndex].edited = true;
                 chat.messages[messageIndex].editedAt = new Date().toISOString();
                 chatStorage.saveChat(currentChatId, chat);
+                console.log(`Chat saved after editing sequence: ${sequence}`); // Log save confirmation
+            } else {
+                console.error(`Could not find message with sequence ${sequence} to save edit.`); // Log if not found
                 
                 // Update chat list if it's a user message that was used as the chat title
                 if (type === 'user' && messageIndex === 0) {
@@ -875,7 +1145,17 @@ function saveEdit(messageDiv, newContent, type) {
 
 function cancelEdit(messageDiv, originalContent) {
     const contentDiv = messageDiv.querySelector('.message-content');
-    contentDiv.textContent = originalContent;
+    // Restore the original content with Markdown if enabled
+    if (isMarkdownEnabled) {
+        try {
+            contentDiv.innerHTML = marked.parse(originalContent);
+        } catch (error) {
+            console.error('Markdown parsing error:', error);
+            contentDiv.textContent = originalContent;
+        }
+    } else {
+        contentDiv.textContent = originalContent;
+    }
     messageDiv.classList.remove('editing');
 }
 
