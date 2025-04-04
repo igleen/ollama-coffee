@@ -19,13 +19,6 @@ A lightweight, web-based GUI in pure javascript for interacting with Ollama mode
   - Import/export functionality
   - Automatic cleanup of old chats (30 days)
 
-## Requirements
-
-- A running Ollama instance with models installed
-- Python 3 for the local server
-- Web browser with JavaScript enabled
-- Local storage access for chat persistence
-
 ## Installation & Setup
 
 1. Ensure Ollama is installed and running on your system
@@ -36,13 +29,6 @@ A lightweight, web-based GUI in pure javascript for interacting with Ollama mode
 6. Select your preferred model from the dropdown
 
 The application will automatically connect to Ollama's API at `http://localhost:11434/api`.
-
-## Usage
-
-### Basic Chat
-1. Select a model from the dropdown menu
-2. Type your prompt in the input area
-3. Press Enter or click Send to start the conversation
 
 ### Import/Export
 1. Click the "Actions" dropdown
