@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:11434/api';
-const APP_VERSION = '0.2';
+const APP_VERSION = '0.3';
 // Configure marked options
 marked.setOptions({
     breaks: true,     // Enable line breaks
@@ -61,6 +61,7 @@ let selectedChats = new Set();
 let abortController = null;
 let currentTheme = localStorage.getItem('theme') || 'coffee';
 let isMarkdownEnabled = localStorage.getItem('markdownEnabled') === 'false' ? false : true;
+let isRealtimeMarkdownEnabled = localStorage.getItem('realtimeMarkdownEnabled') === 'false' ? false : true;
 
 // Performance tracking
 let currentMetrics = {
@@ -470,10 +471,12 @@ function switchTheme() {
 function toggleMarkdownMode() {
     isMarkdownEnabled = !isMarkdownEnabled;
     localStorage.setItem('markdownEnabled', isMarkdownEnabled);
-    
-    // Update button text
-    const toggleBtn = document.getElementById('toggleMarkdown');
-    toggleBtn.textContent = isMarkdownEnabled ? 'Disable Markdown' : 'Enable Markdown';
+
+    // If Markdown is disabled, also disable Realtime Markdown
+    if (!isMarkdownEnabled) {
+        isRealtimeMarkdownEnabled = false;
+        localStorage.setItem('realtimeMarkdownEnabled', isRealtimeMarkdownEnabled);
+    }
 
     // Re-render existing messages
     if (currentChatId) {
@@ -490,6 +493,7 @@ function toggleMarkdownMode() {
     }
     
     updateStatus(`Markdown rendering ${isMarkdownEnabled ? 'enabled' : 'disabled'}`);
+    updateMarkdownButtonsUI(); // Update UI for both buttons
 }
 
 // Function to adjust textarea height based on content
@@ -554,11 +558,42 @@ function recalculateMessageContainerSize() {
     }
 }
 
+// Function to update the UI of both markdown buttons
+function updateMarkdownButtonsUI() {
+    const markdownBtn = document.getElementById('toggleMarkdown');
+    const realtimeBtn = document.getElementById('toggleRealtimeMarkdown');
+
+    if (!markdownBtn || !realtimeBtn) return; // Buttons might not be created yet
+
+    const markdownTextSpan = markdownBtn.querySelector('span:first-child');
+    const markdownIndicator = markdownBtn.querySelector('.toggle-indicator');
+    const realtimeTextSpan = realtimeBtn.querySelector('span:first-child');
+    const realtimeIndicator = realtimeBtn.querySelector('.toggle-indicator');
+
+    // Update Markdown Button
+    markdownTextSpan.textContent = 'Markdown'; // Static text
+    markdownIndicator.textContent = isMarkdownEnabled ? 'on' : 'off';
+    markdownIndicator.className = `toggle-indicator ${isMarkdownEnabled ? 'on' : 'off'}`;
+
+    // Update Realtime Markdown Button
+    realtimeTextSpan.textContent = 'Streaming'; // Static text
+    realtimeIndicator.textContent = isRealtimeMarkdownEnabled ? 'on' : 'off';
+    realtimeIndicator.className = `toggle-indicator ${isRealtimeMarkdownEnabled ? 'on' : 'off'}`;
+
+    // Show/hide and enable/disable Realtime button based on Markdown state
+    realtimeBtn.style.display = isMarkdownEnabled ? 'block' : 'none';
+    realtimeBtn.disabled = !isMarkdownEnabled;
+    realtimeBtn.classList.toggle('disabled', !isMarkdownEnabled); // Add class for styling disabled state
+}
+
 function setupEventListeners() {
-    // Initialize theme and markdown button
+    // Initialize theme
     document.documentElement.setAttribute('data-theme', currentTheme);
+
+    // Get Markdown button elements
     const toggleMarkdownBtn = document.getElementById('toggleMarkdown');
-    toggleMarkdownBtn.textContent = isMarkdownEnabled ? 'Disable Markdown' : 'Enable Markdown';
+    const markdownTextSpan = toggleMarkdownBtn.querySelector('span:first-child'); // Already exists from HTML change
+    const markdownIndicator = toggleMarkdownBtn.querySelector('.toggle-indicator'); // Already exists from HTML change
     
     // Setup auto-resize for textarea
     setupTextareaAutoResize();
@@ -603,6 +638,35 @@ function setupEventListeners() {
     
     // Export button
     exportChatsBtn.addEventListener('click', exportChatHistory);
+
+    // Create and setup Realtime Markdown toggle button
+    const toggleRealtimeMarkdownBtn = document.createElement('button');
+    toggleRealtimeMarkdownBtn.id = 'toggleRealtimeMarkdown';
+    // Add class for styling and indentation
+    toggleRealtimeMarkdownBtn.className = 'dropdown-item markdown-toggle-btn sub-item streaming-toggle-btn';
+    toggleRealtimeMarkdownBtn.innerHTML = `
+        <span>Streaming</span>
+        <span class="toggle-indicator"></span>
+    `;
+    // Insert the realtime button immediately after the main markdown button
+    toggleMarkdownBtn.insertAdjacentElement('afterend', toggleRealtimeMarkdownBtn);
+
+    // Get Realtime button elements
+    const realtimeTextSpan = toggleRealtimeMarkdownBtn.querySelector('span:first-child');
+    const realtimeIndicator = toggleRealtimeMarkdownBtn.querySelector('.toggle-indicator');
+
+    // Add event listener for Realtime Markdown button
+    toggleRealtimeMarkdownBtn.addEventListener('click', () => {
+        if (!isMarkdownEnabled) return; // Should not be clickable if parent is disabled
+
+        isRealtimeMarkdownEnabled = !isRealtimeMarkdownEnabled;
+        localStorage.setItem('realtimeMarkdownEnabled', isRealtimeMarkdownEnabled);
+        updateMarkdownButtonsUI(); // Update UI
+
+        // Close dropdown after selecting action
+        chatActionsBtn.classList.remove('active');
+        chatActionsMenu.classList.remove('show');
+    });
     
     // Import button
     importChatsBtn.addEventListener('click', () => {
@@ -635,8 +699,9 @@ function setupEventListeners() {
     });
 
     // Markdown toggle
-    document.getElementById('toggleMarkdown').addEventListener('click', () => {
-        toggleMarkdownMode();
+    // Add event listener for Markdown button
+    toggleMarkdownBtn.addEventListener('click', () => {
+        toggleMarkdownMode(); // This function now calls updateMarkdownButtonsUI
         // Close dropdown after selecting action
         chatActionsBtn.classList.remove('active');
         chatActionsMenu.classList.remove('show');
@@ -649,6 +714,9 @@ function setupEventListeners() {
             document.getElementById('deletionModePopup').classList.remove('visible');
         });
     }
+
+    // Initial UI setup for markdown buttons
+    updateMarkdownButtonsUI();
 }
 
 // Function to set up textarea auto-resize
@@ -871,7 +939,7 @@ async function generateResponse(prompt) {
                         updateMetrics();
                     }
                     // Clean response chunk of trailing spaces
-                    const responseChunk = data.response.replace(/[\n\s]+$/, '');
+                    const responseChunk = data.response;
                     botResponse += responseChunk;
 
                     // Update the specific bot message element
@@ -879,11 +947,19 @@ async function generateResponse(prompt) {
                         const contentDiv = botMessageElement.querySelector('.message-content');
                         if (contentDiv) {
                             contentDiv.textContent = botResponse; // Update with cumulative content
-                        }
+                            if (isRealtimeMarkdownEnabled) {
+                                try {
+                                    contentDiv.innerHTML = marked.parse(botResponse);
+                                } catch (error) {
+                                    console.error('Markdown parsing error:', error);
+                                    contentDiv.textContent = botResponse;
+                                }
+                            }
                     }
-                } catch (error) {
-                    console.error('Error parsing chunk:', error);
                 }
+            } catch (error) {
+                console.error('Error parsing chunk:', error);
+            }
             }
         }
     } catch (error) {
@@ -901,7 +977,7 @@ async function generateResponse(prompt) {
             if (contentDiv) {
                 // Re-render the last message with correct markdown
                 const cleanContent = botResponse.replace(/[\n\s]+$/, '');
-                contentDiv.innerHTML = isMarkdownEnabled ? marked.parse(cleanContent) : cleanContent;
+                contentDiv.innerHTML = (isMarkdownEnabled || isRealtimeMarkdownEnabled) ? marked.parse(cleanContent) : cleanContent;
             }
         }
         if (metricsUpdateInterval) {
@@ -924,7 +1000,7 @@ function appendMessage(content, type, save = true, sequenceNum = null) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     // Clean content of trailing newlines and spaces
-    const cleanContent = content.replace(/[\n\s]+$/, '');
+    const cleanContent = content;
     // Store the raw content in the message div's dataset
     messageDiv.dataset.rawContent = cleanContent;
     // Use Markdown if enabled, otherwise use plain text
