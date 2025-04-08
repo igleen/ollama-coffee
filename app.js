@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:11434/api';
-const APP_VERSION = '0.3';
+const APP_VERSION = '0.7';
 // Configure marked options
 marked.setOptions({
     breaks: true,     // Enable line breaks
@@ -23,16 +23,30 @@ renderer.code = (code, language) => {
         .replace(/'/g, "&#039;");
     }
     
-    if (typeof code !== 'string') {
-      try {
-        code = JSON.stringify(code, null, 2);
-      } catch (err) {
-        code = String(code);
-      }
+    // Reinstate type checking and safe string conversion
+    // This handles cases where marked.js might pass non-strings to the renderer.
+    let codeAsString = '';
+    if (typeof code === 'string') {
+        codeAsString = code;
+    } else if (typeof code === 'object' && code !== null && typeof code.text === 'string') {
+        // If 'code' is an object with a 'text' property, use that.
+        codeAsString = code.text;
+    } else if (code !== null && code !== undefined) {
+        // Last resort: Attempt to convert other types safely
+        try {
+            codeAsString = String(code); // This might still result in [object Object] if it's an unknown object type
+            if (codeAsString === '[object Object]') {
+                 console.warn("Code block content was an unrecognized object:", code);
+                 codeAsString = ''; // Prefer empty string over '[object Object]'
+            }
+        } catch (e) {
+            console.error("Could not convert code block content to string:", code);
+            codeAsString = ''; // Fallback to empty string on error
+        }
     }
     
-    const escapedCode = escapeHtml(code);
-    const langClass = language ? `language-${language}` : 'language-text';
+    const escapedCode = escapeHtml(codeAsString); // Pass the guaranteed string
+    const langClass = language ? `language-${language}` : 'language-text'; // Define langClass based on input language
     return `<pre><code class="${langClass}">${escapedCode}</code></pre>`;
 };
 marked.use({ renderer });
@@ -952,10 +966,10 @@ async function generateResponse(prompt) {
                                     contentDiv.innerHTML = marked.parse(botResponse);
                                 } catch (error) {
                                     console.error('Markdown parsing error:', error);
-                                    contentDiv.textContent = botResponse;
+                                    contentDiv.textContent = botResponse; // Fallback to text if parsing fails mid-stream
                                 }
                             }
-                    }
+                        }
                 }
             } catch (error) {
                 console.error('Error parsing chunk:', error);
@@ -999,7 +1013,7 @@ function appendMessage(content, type, save = true, sequenceNum = null) {
     // Create content container and clean content
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    // Clean content of trailing newlines and spaces
+    // Clean content of trailing newlines and spaces and preserve line breaks
     const cleanContent = content;
     // Store the raw content in the message div's dataset
     messageDiv.dataset.rawContent = cleanContent;
@@ -1012,7 +1026,9 @@ function appendMessage(content, type, save = true, sequenceNum = null) {
             contentDiv.textContent = cleanContent;
         }
     } else {
-        contentDiv.textContent = cleanContent;
+        // Replace newlines with <br> tags for plaintext mode
+        const textWithLineBreaks = cleanContent.replace(/\n/g, '<br>');
+        contentDiv.innerHTML = textWithLineBreaks;
     }
     messageDiv.appendChild(contentDiv);
     
